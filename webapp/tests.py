@@ -9,7 +9,7 @@ class AppTestCase(unittest.TestCase):
    def test_root_text(self):
         tester = app.test_client(self)
         response = tester.get('/')
-        assert 'Try it now' in response.data
+        assert 'Sign up now' in response.data
 
 if __name__ == '__main__':
     unittest.main()
