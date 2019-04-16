@@ -1,0 +1,82 @@
+workflows:
+  version: 2
+  build-test-&-deploy:
+    jobs:
+      - build
+      - test:
+          requires:
+            - build
+      - deployment-gate:
+          type: approval
+          requires:
+            - test
+      - deploy-heroku:
+          requires:
+            - deployment-gate
+          context: chatops
+          filters:
+            branches:
+              only:
+                - master
+
+version: 2.1
+orbs:
+  slack: circleci/slack@2.0.0
+jobs:
+  build:
+    working_directory: ~/projectName
+
+    machine: true
+
+    steps:
+      - checkout
+
+      - run:
+          name: setup heroku cli
+          command: |
+            chmod +x scripts/setup_herokucli.sh && scripts/setup_herokucli.sh
+
+      - run:
+          name: configure deps
+          command: |
+            pip install flask && pip install pytest
+
+      - run:
+          name: run tests
+          command: |
+            cd webapp
+            mkdir test-reports
+            pytest tests.py --junitxml=test-reports/junit.xml
+
+      - store_test_results:
+          path: /home/circleci/projectName/webapp/test-reports
+
+      - store_artifacts:
+          path: /home/circleci/projectName/webapp/test-reports
+
+      - run: docker build -t registry.heroku.com/circleci-demo-ag/web:${CIRCLE_SHA1} .
+      - run: docker push registry.heroku.com/circleci-demo-ag/web:${CIRCLE_SHA1}
+
+  test:
+    working_directory: ~/projectName
+
+    machine: true
+
+    steps:
+      - checkout
+
+      - run: chmod +x scripts/setup_herokucli.sh && scripts/setup_herokucli.sh
+      - run: docker pull registry.heroku.com/circleci-demo-ag/web:${CIRCLE_SHA1}
+
+  deploy-heroku:
+    working_directory: ~/projectName
+
+    machine: true
+
+    steps:
+      - checkout
+      - run: chmod +x scripts/setup_herokucli.sh && scripts/setup_herokucli.sh
+      - run: chmod +x scripts/deploy.sh && scripts/deploy.sh
+      - slack/status:
+          mentions: 'aaron'
+          webhook: ${SLACK_WEBHOOK}
